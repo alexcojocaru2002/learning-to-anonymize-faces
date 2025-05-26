@@ -13,7 +13,6 @@ def visualize_data():
 
 def run():
     transform = T.Compose([
-        T.Resize((128, 128)),
         T.ToTensor()
     ])
 
@@ -23,14 +22,19 @@ def run():
     # Get one batch
     data_iter = iter(loader)
     clips, labels = next(data_iter)
-    # Select first clip in the batch
-    clip = clips[2]  # Shape: (T, C, H, W)
-    label = labels[2]
 
     # Save each frame
     save_dir = "data/JHMBD_saved_frames/"
     os.makedirs(save_dir, exist_ok=True)
 
-    for i, frame in enumerate(clip):
-        img = to_pil_image(frame)
-        img.save(os.path.join(save_dir, f"frame_{i:03d}.png"))
+    # Select first clip in the batch
+    for j in range(0, clips.shape[0]):
+        clip = clips[j]  # Shape: (T, C, H, W)
+        label = labels[j]
+
+        print(j)
+        os.makedirs(save_dir + f"video_{j:03d}", exist_ok=True)
+
+        for i, frame in enumerate(clip):
+            img = to_pil_image(frame)
+            img.save(os.path.join(save_dir + f"video_{j:03d}/" + f"frame_{i:03d}.png"))
