@@ -14,12 +14,14 @@ class DALYFramesDataset(Dataset):
     def get_video_info(self, video_name):
         video_info = []
         for action in self.daly['annot'][video_name]['annot'].keys():
-            video_info.append({
-                'action': action,
-                'startTime': self.daly['annot'][video_name]['annot'][action][0].get('beginTime', None),
-                'endTime': self.daly['annot'][video_name]['annot'][action][0].get('endTime', None)
-            })
+            for index, instance in enumerate(self.daly['annot'][video_name]['annot'][action]):
+                video_info.append({
+                    'action': action,
+                    'instance': index,
+                    'startTime': instance.get('beginTime', None),
+                    'endTime': instance.get('endTime', None)
+                })
             
         return video_info
-    
+ 
     
