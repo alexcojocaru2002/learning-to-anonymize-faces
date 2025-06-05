@@ -1,6 +1,6 @@
 data/*
 outputs/*
-
+weights/*
 .idea/
 
 # Byte-compiled / optimized / DLL files
