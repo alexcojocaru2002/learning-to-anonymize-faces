@@ -17,6 +17,7 @@ and then go to https://pytorch.org/get-started/locally/ and run the command sugg
 
 Then proceed with installing the rest of the dependencies:
 
+
 ```sh
 pip install -r requirements.txt
 ```
@@ -28,6 +29,12 @@ First you should create the outputs/, data/ folders.
 To use **JHMDB** you have to download the .tar.gz archive from https://drive.google.com/drive/folders/1BvGywlAGrACEqRyfYbz3wzlVV3cDFkct.
 
 Afterwards, place the JHMDB folder in the /data folder.
+
+
+4. Download the weights for the pretrained models
+
+For the pretrained Yolov8-face model we use the weights from here https://github.com/derronqi/YOLOv8-Face?tab=readme-ov-file (the yolov8n model)
+For the pretrained sphereface model we use the weights from here: https://github.com/clcarwin/sphereface_pytorch/blob/master/model/sphere20a_20171020.7z
 
 ## Data Visualization 
 

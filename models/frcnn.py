@@ -1,6 +1,9 @@
 import torch
+from torch import nn
 from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
+from torchvision.models.resnet import resnet101, ResNet101_Weights
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor, FasterRCNN
 from torchvision import transforms
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -21,50 +24,24 @@ action_classes = {
     10: "watching TV"
 }
 
-# ---------- Load Pretrained Model ----------
-device = torch.device("mps" if torch.mps.is_available() else "cpu")
-model = fasterrcnn_resnet50_fpn_v2(weights="DEFAULT")
-in_features = model.roi_heads.box_predictor.cls_score.in_features
-num_action_classes = len(action_classes)
-# model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_action_classes + 1)
-model.to(device)
-model.eval()
+class MyFRCNN(nn.Module):
+    def __init__(self, num_action_classes):
+        super().__init__()
+        device = torch.device("mps" if torch.backends.mps.is_available() else
+                              "cuda" if torch.cuda.is_available() else "cpu")
 
-# ---------- Load and Transform DALY Frame ----------
-transform = transforms.Compose([  # Resize to DALY paper specs
-    transforms.ToTensor()
-])
+        backbone = resnet_fpn_backbone('resnet101', weights=ResNet101_Weights.IMAGENET1K_V1)
+        self.model = FasterRCNN(backbone, num_classes=num_action_classes + 1)
 
-# Load your video frame image here
-image_path = "drink.jpg"  # Replace with your image path
-image = Image.open(image_path).convert("RGB")
-image_tensor = transform(image).to(device)
+        # Declare new head with num of action classes linked to
+        self.model.to(device)
 
-# ---------- Run Inference ----------
-with torch.no_grad():
-    prediction = model([image_tensor])[0]
-
-# ---------- Print Predictions ----------
-print("\n--- Predictions ---")
-for box, label, score in zip(prediction['boxes'], prediction['labels'], prediction['scores']):
-    # if score > 0.5:
-    print(f"Action: {label.item()}, "
-            f"Score: {score:.2f}, Box: {box.cpu().numpy()}")
-
-# ---------- Visualize ----------
-fig, ax = plt.subplots(1, figsize=(12, 8))
-ax.imshow(image)
-
-for box, label, score in zip(prediction['boxes'], prediction['labels'], prediction['scores']):
-    if score > 0.5:
-        x1, y1, x2, y2 = box.cpu().numpy()
-        rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=2,
-                                 edgecolor='red', facecolor='none')
-        ax.add_patch(rect)
-        ax.text(x1, y1 - 10,
-                f"{label.item()}: {score:.2f}",
-                color='red', fontsize=10, backgroundcolor='white')
-
-plt.axis('off')
-plt.tight_layout()
-plt.show() 
+    '''
+    images: list of input images (tensors, shape [3, H, W])
+    targets: list of dicts, each with:
+        "boxes": Tensor[N, 4] (in [x1, y1, x2, y2] format)
+        "labels": Tensor[N] (integer class labels)
+        Optionally "image_id", "masks", etc
+    '''
+    def forward(self, images, targets=None):
+        return self.model(images, targets)
