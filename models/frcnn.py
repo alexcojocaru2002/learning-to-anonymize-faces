@@ -33,7 +33,7 @@ class MyFRCNN(nn.Module):
         backbone = resnet_fpn_backbone('resnet101', weights=ResNet101_Weights.IMAGENET1K_V1)
         self.model = FasterRCNN(backbone, num_classes=num_action_classes + 1)
 
-        # Declare new head with num of action classes linked to
+        # We will train this end to end but since the backbone resnet is pretrained on imagenet it should not be the longest training
         self.model.to(device)
 
     '''
