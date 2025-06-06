@@ -19,27 +19,40 @@ class MyFaceIdYOLOv8:
         """
         # Convert tensor to numpy image
         img_np = tensor_rgb.detach().clamp(0, 1).mul(255).byte().permute(1, 2, 0).cpu().numpy()
-
         # YOLO expects BGR
         img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
-
         # Run inference
         results = self.model.predict(img_bgr, verbose=False)[0]
-
         detections = []
         for box in results.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].int().tolist()
-            keypoints = []
-            if hasattr(box, "keypoints") and box.keypoints is not None:
-                keypoints = box.keypoints[0].cpu().int().tolist()
-            detections.append({
-                "bbox": [x1, y1, x2, y2],
-                "keypoints": keypoints  # Will be empty if not supported
-            })
+            if float(box.conf[0]) > 0.5: # if confidence is high enough
+                x1, y1, x2, y2 = box.xyxy[0].int().tolist()
+                keypoints = []
+                if hasattr(box, "keypoints") and box.keypoints is not None:
+                    keypoints = box.keypoints[0].cpu().int().tolist()
+                detections.append({
+                    "bbox": [x1, y1, x2, y2],
+                    "keypoints": keypoints  # Will be empty if not supported
+                })
 
         return detections
 
-    def visualize(self, tensor_rgb, figsize=(8, 6)):
+    # v is frame from video as a tensor
+    def cut_regions(self, v, bounding_boxes):
+        crops = []
+        v_copy = v.clone()  # avoid modifying original if needed
+
+        for box in bounding_boxes:
+            x1, y1, x2, y2 = box.xyxy[0].int().tolist()
+            crop = v_copy[:, y1:y2, x1:x2]
+            crops.append(crop)  # list of cropped face regions
+
+            # Zero out that region in the original tensor
+            v_copy[:, y1:y2, x1:x2] = 0
+
+        return crops, v_copy
+
+def visualize(self, tensor_rgb, figsize=(8, 6)):
         """
         Visualize detected faces and keypoints on the input image.
         """

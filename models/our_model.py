@@ -9,13 +9,9 @@ from models.sphereface import sphere20a
 
 class OurModel(nn.Module):
 
-    def __init__(self):
+    def __init__(self, num_output_classes):
         super(OurModel, self).__init__()
         self.face_detection = MyFaceIdYOLOv8()
         self.m = ResNet()
-        self.a = MyFRCNN(10)
+        self.a = MyFRCNN(num_output_classes)
         self.d = sphere20a()
-
-    def forward(self, v):
-        # input video frame v
-        return self.face_detection.visualize(v)
