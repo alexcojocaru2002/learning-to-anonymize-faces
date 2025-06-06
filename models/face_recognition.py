@@ -52,25 +52,25 @@ class MyFaceIdYOLOv8:
 
         return crops, v_copy
 
-def visualize(self, tensor_rgb, figsize=(8, 6)):
-        """
-        Visualize detected faces and keypoints on the input image.
-        """
-        img_np = tensor_rgb.detach().clamp(0, 1).permute(1, 2, 0).cpu().numpy()
-        detections = self.detect_faces_yolo(tensor_rgb)
+    def visualize(self, tensor_rgb, figsize=(8, 6)):
+            """
+            Visualize detected faces and keypoints on the input image.
+            """
+            img_np = tensor_rgb.detach().clamp(0, 1).permute(1, 2, 0).cpu().numpy()
+            detections = self.detect_faces_yolo(tensor_rgb)
 
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.imshow(img_np)
-        ax.axis('off')
+            fig, ax = plt.subplots(figsize=figsize)
+            ax.imshow(img_np)
+            ax.axis('off')
 
-        for det in detections:
-            x1, y1, x2, y2 = det['bbox']
-            rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1,
-                                     linewidth=2, edgecolor='cyan', facecolor='none')
-            ax.add_patch(rect)
+            for det in detections:
+                x1, y1, x2, y2 = det['bbox']
+                rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1,
+                                         linewidth=2, edgecolor='cyan', facecolor='none')
+                ax.add_patch(rect)
 
-            for kp in det['keypoints']:
-                ax.plot(kp[0], kp[1], 'ro', markersize=4)
+                for kp in det['keypoints']:
+                    ax.plot(kp[0], kp[1], 'ro', markersize=4)
 
-        plt.tight_layout()
-        plt.show()
+            plt.tight_layout()
+            plt.show()
