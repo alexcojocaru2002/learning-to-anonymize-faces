@@ -1,3 +1,4 @@
+from alignment import align
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -19,6 +20,11 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
         f = faces
         m_f = model.m(f)
         # align m_f
+        detections = model.face_detection.detect_faces_yolo(m_f)
+        aligned_faces = []
+        for index, face in enumerate(m_f):
+            aligned_faces.append(align(face, detections[index]['bbox'], detections[index]['keypoints']))
+        
         l_adv = adversarial_loss(m_f, f, flabels, model.d)
         # argmax update on D
         optimizer_d.zero_grad()
