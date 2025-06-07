@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from dataloader.jhmdb import JHMDBFramesDataset
 from losses.adversarial_loss import adversarial_loss
@@ -11,15 +12,14 @@ import torch.nn.functional as F
 def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d, optimizer_a, optimizer_m):
     video_iter = iter(loader_video)
     faces_iter = iter(loader_faces)
-    for t in range(0, T1):
+    for epoch in tqdm(range(T1)):
         clips, labels = next(video_iter)
         faces, flabels = next(faces_iter)
         v = clips
         f = faces
         m_f = model.m(f)
-
+        # align m_f
         l_adv = adversarial_loss(m_f, f, flabels, model.d)
-
         # argmax update on D
         optimizer_d.zero_grad()
         optimizer_m.zero_grad()
@@ -43,16 +43,26 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
         l_det_dict = model.a(v_prime, labels)
         l_det = sum(l_det_dict.values()) # sum of the loss values
 
+        # argmin M, A update
         final_loss = l_adv + l_det + lambda_weight * l1
         optimizer_a.zero_grad()
         final_loss.backward()
         optimizer_a.step()
 
-        # argmin M, A update
+    #second for for fine tuning A
 
 
 def run(num_output_classes=10):
+    # Initialize model and learning rates
     model = OurModel(num_output_classes)
+    lr_m = lr_d = 0.0003
+    lr_a = 0.001
+    optimizer_m = torch.optim.Adam(model.m.parameters(), betas=(0.5, 0.999), lr=lr_m)
+    optimizer_d = torch.optim.Adam(model.d.parameters(), betas=(0.5, 0.999), lr=lr_d)
+    optimizer_a = torch.optim.Adam(model.a.parameters(), betas=(0.5, 0.999), lr=lr_a)
+
+    # Transformations for our dataloader
+    # Storing images as tensors
     transform = T.Compose([
         T.ToTensor()
     ])
@@ -60,10 +70,5 @@ def run(num_output_classes=10):
     dataset = JHMDBFramesDataset("data/JHMDB/Frames", transform=transform)
     loader = DataLoader(dataset, batch_size=4, shuffle=True)
 
-    lr_m = lr_d = 0.0003
-    lr_a = 0.001
-    optimizer_m = torch.optim.Adam(model.m.parameters(), betas=(0.5, 0.999), lr=lr_m)
-    optimizer_d = torch.optim.Adam(model.d.parameters(), betas=(0.5, 0.999), lr=lr_d)
-    optimizer_a = torch.optim.Adam(model.a.parameters(), betas=(0.5, 0.999), lr=lr_a)
 
     train(model, loader, loader, 12, 10, lambda_weight=1, optimizer_m=optimizer_m, optimizer_d=optimizer_d, optimizer_a=optimizer_a)

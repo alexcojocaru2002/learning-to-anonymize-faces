@@ -1,6 +1,6 @@
 import argparse
 
-from scripts import visualize_data
+from scripts import visualize_data, train
 import configparser
 
 if __name__ == '__main__':
@@ -16,3 +16,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.script_name == "visualize_data":
         visualize_data()
+    if args.script_name == "train":
+        train()
