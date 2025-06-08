@@ -54,8 +54,9 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
             final_loss.backward()
             optimizer_a.step()
 
-    #second for for fine tuning A
+        #second for for fine tuning A
 
+        torch.save(model.state_dict(), f"checkpoints/epoch_{epoch}.pth")
 
 def run(num_output_classes=10):
     # Initialize model and learning rates
