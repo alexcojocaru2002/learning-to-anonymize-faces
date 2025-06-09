@@ -1,93 +1,71 @@
+import glob
+import os
 import struct, torch
 from pathlib import Path
 from io import BytesIO
+from numpy import random
+from torch.utils.data import Dataset
+
 from PIL import Image
 from torch.utils.data import Dataset
 
 
-class CasiaRecordIODataset(Dataset):
-    """
-    CASIA-WebFace loader that works with either
-      • binary MXNet train.idx  (8-byte header + 16-byte pairs)
-      • plain-text  train.idx   (idx \t offset per line)
-    """
+class CasiaDataset(Dataset):
+    def __init__(self, data_dir='data', transform=None):
+        super().__init__()
 
-    def __init__(self, folder, transform=None):
-        folder = Path(folder)
-        self.rec_path = folder / "train.rec"
-        self.idx_path = folder / "train.idx"
-        lst_path      = folder / "train.lst"
+        # make labels
+        img_folder_name = os.listdir(data_dir)
+        img_folder_name.sort()
+
+        self.labels = {}
+        for index, label in enumerate(img_folder_name):
+            self.labels[label] = index
+
+        # make images path
+        images = glob.glob(data_dir + '/**/*.jpg', recursive=True)
+
+        # make indexlist
+        self.indexlist = []
+        for image in images:
+            self.indexlist.append(image + ' ' + str(self.labels[os.path.normpath(image).split('\\')[-2]]))
+
+        random.shuffle(self.indexlist)
+
+        # transform
         self.transform = transform
 
-        # ---------- 1. idx → label map (robust) ----------------------------
-        self.idx2label = {}
-        with open(lst_path, "r") as f:
-            for line in f:
-                p = line.strip().split()
-                if len(p) < 3:
-                    continue
-                if p[1].isdigit():                 # idx label path
-                    rec_idx, identity = int(p[0]), int(p[1])
-                elif p[-1].isdigit():             # idx path label
-                    rec_idx, identity = int(p[0]), int(p[-1])
-                else:                             # fallback: folder name
-                    rec_idx = int(p[0])
-                    identity = int(Path(p[1]).parts[-2])
-                self.idx2label[rec_idx] = identity
+    def sample_negative(self, a_cls):
+        while True:
+            rand = random.randint(0, len(self.indexlist) - 1)
+            name, cls = self.indexlist[rand].split()[0:2]
+            if cls != a_cls:
+                break
+        return rand
 
-        # ---------- 2. read train.idx (binary *or* text) -------------------
-        rec_size = self.rec_path.stat().st_size
-        pairs = []                                # (idx, offset)
+    def load_img(self, index):
+        info = self.indexlist[index].split()
+        cls = int(info[1])
 
-        with open(self.idx_path, "rb") as f:
-            first8 = f.read(8)                    # peek
-            f.seek(0)
-            is_text = all(32 <= b < 127 for b in first8)  # ASCII?
+        img = Image.open(info[0]).convert('RGB')
+        return img, cls
 
-            if is_text:
-                # plain-text mode
-                for line in f:
-                    if not line.strip():
-                        continue
-                    idx_str, pos_str, *_ = line.decode().split()
-                    idx, pos = int(idx_str), int(pos_str)
-                    if 0 <= pos < rec_size:
-                        pairs.append((idx, pos))
-            else:
-                # binary MXNet mode
-                f.read(8)                         # skip header
-                while True:
-                    buf = f.read(16)
-                    if len(buf) < 16:
-                        break
-                    idx, pos = struct.unpack("<qq", buf)
-                    if idx < 0 or pos < 0 or pos >= rec_size:
-                        continue                 # drop sentinel
-                    pairs.append((idx, pos))
+    def __getitem__(self, index):
+        # Get the index of each image in the triplet
+        a_name, a_cls = self.indexlist[index].split()
+        n_index = self.sample_negative(a_cls)
 
-        if not pairs:
-            raise RuntimeError("train.idx contained no valid pairs!")
+        _a, a_cls = self.load_img(index)
+        _n, n_cls = self.load_img(n_index)
 
-        pairs.sort(key=lambda kp: kp[0])          # order by idx
-        self.record_keys = [k for k, _ in pairs]
-        self.pos_of      = {k: p for k, p in pairs}
-
-    # ---------------------------------------------------------------------
-    def __len__(self):
-        return len(self.record_keys)
-
-    def __getitem__(self, idx):
-        rec_idx = self.record_keys[idx]
-        pos     = self.pos_of[rec_idx]
-
-        with open(self.rec_path, "rb") as f:
-            f.seek(pos)
-            length, _ = struct.unpack("<II", f.read(8))
-            img_bytes = f.read(length - 8)
-
-        img = Image.open(BytesIO(img_bytes)).convert("RGB")
+        # transform images if required
         if self.transform:
-            img = self.transform(img)
+            img_a = self.transform(_a)
+            img_n = self.transform(_n)
+        else:
+            img_a = _a
+            img_n = _n
+        return img_a, img_n, a_cls, n_cls
 
-        label = torch.tensor(self.idx2label[rec_idx], dtype=torch.long)
-        return img, label
+    def __len__(self):
+        return len(self.indexlist)
