@@ -7,7 +7,7 @@ import torchvision.transforms as T
 from torchvision.transforms import ToPILImage, transforms
 from torchvision.transforms.functional import to_pil_image
 
-from dataloader.jhmdb import JHMDBFramesDataset
+from dataloader.jhmdb import JHMDBFrameDetDataset
 from models.face_recognition import MyFaceIdYOLOv8
 
 
@@ -27,7 +27,7 @@ def run():
         T.ToTensor()
     ])
 
-    dataset = JHMDBFramesDataset("data/JHMDB/Frames", transform=transform)
+    dataset = JHMDBFrameDetDataset("data/JHMDB/Frames", transform=transform)
     loader = DataLoader(dataset, batch_size=4, shuffle=True)
 
     # Initialize face recognizer

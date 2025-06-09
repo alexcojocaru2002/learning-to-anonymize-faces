@@ -2,9 +2,7 @@ torchvision~=0.21.0
 torch~=2.6.0
 pillow~=11.1.0
 matplotlib~=3.10.3
-deepface~=0.0.93
 tensorflow==2.19.0
 tf-keras==2.19.0
 opencv-python~=4.11.0.86
-onnxruntime-gpu
 ultralytics~=8.3.150

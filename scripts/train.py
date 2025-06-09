@@ -1,9 +1,15 @@
+from collections import defaultdict
+from random import random
+
+from torchvision.transforms import transforms
+
 from alignment import align
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
-from dataloader.jhmdb import JHMDBFramesDataset
+from dataloader.casiawebface import CasiaRecordIODataset
+from dataloader.jhmdb import JHMDBFrameDetDataset
 from losses.adversarial_loss import adversarial_loss
 from models.our_model import OurModel
 import torchvision.transforms as T
@@ -58,6 +64,41 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
 
         torch.save(model.state_dict(), f"checkpoints/epoch_{epoch}.pth")
 
+def train_validation_split(vtransform, ftransform):
+    vtrain = JHMDBFrameDetDataset("data/JHMDB", split="train", transform=vtransform)
+    vval = JHMDBFrameDetDataset("data/JHMDB", split="test", transform=vtransform)
+    fdataset = CasiaRecordIODataset("data/faces_webface_112x112", transform=ftransform)
+
+    def collate_fn(batch):
+        return tuple(zip(*batch))
+
+    vtrain_loader = DataLoader(vtrain, batch_size=4, shuffle=True, collate_fn=collate_fn)
+    vval_loader = DataLoader(vval, batch_size=4, shuffle=False, collate_fn=collate_fn)
+
+    # -------------- group indices by identity ------------------------------
+    id_to_indices = defaultdict(list)
+    for idx, (_, label) in enumerate(fdataset):
+        id_to_indices[int(label)].append(idx)
+
+    identity_ids = list(id_to_indices.keys())
+    random.seed(42)  # reproducible
+    random.shuffle(identity_ids)
+
+    # 80 % identities → train, 20 % → val
+    split_point = int(0.8 * len(identity_ids))
+    train_ids, val_ids = identity_ids[:split_point], identity_ids[split_point:]
+
+    train_idx = [i for pid in train_ids for i in id_to_indices[pid]]
+    val_idx = [i for pid in val_ids for i in id_to_indices[pid]]
+
+    ftrain = Subset(fdataset, train_idx)
+    fval = Subset(fdataset, val_idx)
+
+    ftrain_loader = DataLoader(ftrain, batch_size=64, shuffle=True, num_workers=4)
+    fval_loader = DataLoader(fval, batch_size=64, shuffle=False, num_workers=4)
+
+    return vtrain_loader, vval_loader, ftrain_loader, fval_loader
+
 def run(num_output_classes=10):
     # Initialize model and learning rates
     model = OurModel(num_output_classes)
@@ -69,12 +110,14 @@ def run(num_output_classes=10):
 
     # Transformations for our dataloader
     # Storing images as tensors
-    transform = T.Compose([
+    vtransform = T.Compose([
         T.ToTensor()
     ])
 
-    dataset = JHMDBFramesDataset("data/JHMDB/Frames", transform=transform)
-    loader = DataLoader(dataset, batch_size=4, shuffle=True)
+    ftransform = T.Compose([
+        T.ToTensor()
+    ])
 
+    vtrain_loader, vval_loader, ftrain_loader, fval_loader = train_validation_split(vtransform, ftransform)
 
-    train(model, loader, loader, 12, 10, lambda_weight=1, optimizer_m=optimizer_m, optimizer_d=optimizer_d, optimizer_a=optimizer_a)
+    train(model, vtrain_loader, ftrain_loader, 12, 10, lambda_weight=1, optimizer_m=optimizer_m, optimizer_d=optimizer_d, optimizer_a=optimizer_a)

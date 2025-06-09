@@ -1,54 +1,88 @@
-import os
-from PIL import Image
+import os, pickle, math
+from pathlib import Path
+from io import BytesIO
+from typing import List, Dict, Any
+
+import torch
 from torch.utils.data import Dataset
-from torchvision import transforms
+from PIL import Image
 
-class JHMDBFramesDataset(Dataset):
-    def __init__(self, root_dir, clip_len=16, transform=None):
-        self.root_dir = root_dir  # e.g., "data/jhmdb/Frames"
-        self.clip_len = clip_len
+
+class JHMDBFrameDetDataset(Dataset):
+    """
+    Per-frame action-detection dataset for *jhmdbb-gt.pkl* (gttubes version).
+
+    Each __getitem__ returns:
+        img     : torch.FloatTensor  (C,H,W)
+        target  : {
+                    boxes     : FloatTensor (N,4)  N=1 here
+                    labels    : LongTensor  (N,)
+                    video_id  : str         "brush_hair/April_09_brush_hair_u_nm_np1_ba_goo_0"
+                    frame_idx : LongTensor  scalar
+                  }
+    """
+
+    def __init__(
+        self,
+        root: str,
+        split: str = "train",    # 'train' | 'test'
+        split_id: int = 0,       # which official split (0,1,2)
+        transform=None,
+    ):
+        root        = Path(root)
         self.transform = transform
-        self.samples = self._collect_samples()
+        pkl_path    = root / "JHMDB-GT.pkl"
+        frames_root = root / "Frames"
 
-    def _collect_samples(self):
-        samples = []
-        for class_name in sorted(os.listdir(self.root_dir)):
-            class_dir = os.path.join(self.root_dir, class_name)
-            if not os.path.isdir(class_dir) or class_name.startswith('.'):
-                continue
+        with open(pkl_path, "rb") as f:
+            gt = pickle.load(f, encoding="latin1")
 
-            for video_name in sorted(os.listdir(class_dir)):
-                video_dir = os.path.join(class_dir, video_name)
-                if not os.path.isdir(video_dir) or video_name.startswith('.'):
-                    continue
+        self.labels = gt["labels"]                          # action names
+        vlist       = gt[f"{split}_videos"][split_id]       # chosen videos
+        gttubes     = gt["gttubes"]                         # video → dict[tube] → ndarray(T,5)
 
-                frames = sorted(os.listdir(video_dir))
-                frames = [f for f in frames if not f.startswith('.') and f.endswith(('.jpg', '.png'))]
+        self.samples: List[Dict[str, Any]] = []
+        for video in vlist:
+            class_name, video_name = video.split("/", 1)
+            video_dir = frames_root / class_name / video_name
 
-                if len(frames) >= self.clip_len:
-                    samples.append((video_dir, class_name, frames))
+            for label_id, tube_list in gttubes[video].items():  # dict → list
+                for tube in tube_list:  # ndarray (T,5)
+                    for frame in tube:  # frame = (≥5,)
+                        fnum, x1, y1, x2, y2 = frame[:5]
+                        fnum = int(fnum.item())  # numpy scalar → int
 
-        return samples
+                        fname = f"{fnum:05d}.png"
+                        frame_path = video_dir / fname
+                        if not frame_path.exists():
+                            frame_path = video_dir / f"{fnum:03d}.png"
+                        if not frame_path.exists():
+                            continue
 
+                        self.samples.append(
+                            dict(
+                                frame_path=frame_path,
+                                boxes=[[float(x1), float(y1), float(x2), float(y2)]],
+                                labels=[int(label_id)],
+                                video_id=video,
+                                frame_idx=fnum,
+                            )
+                        )
+
+    # ------------------------------------------------------------------ #
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        video_dir, class_name, frames = self.samples[idx]
-        frame_indices = range(0, self.clip_len)
-        clip = []
-        for i in frame_indices:
-            frame_path = os.path.join(video_dir, frames[i])
-            image = Image.open(frame_path).convert("RGB")
-            if self.transform:
-                image = self.transform(image)
-            clip.append(image)
+        s = self.samples[idx]
+        img = Image.open(s["frame_path"]).convert("RGB")
+        if self.transform:
+            img = self.transform(img)
 
-        import torch
-        clip = torch.stack(clip, dim=0)  # Shape: (T, C, H, W)
-        label = self._class_to_index(class_name)
-        return clip, label
-
-    def _class_to_index(self, class_name):
-        class_names = sorted({s[1] for s in self.samples})
-        return class_names.index(class_name)
+        target = {
+            "boxes"    : torch.tensor(s["boxes"],  dtype=torch.float32),
+            "labels"   : torch.tensor(s["labels"], dtype=torch.int64),
+            "video_id" : s["video_id"],
+            "frame_idx": torch.tensor(s["frame_idx"], dtype=torch.int64),
+        }
+        return img, target

@@ -30,6 +30,8 @@ To use **JHMDB** you have to download the .tar.gz archive from https://drive.goo
 
 Afterwards, place the JHMDB folder in the /data folder.
 
+CasiaWebface is also required for our codebase and can be downloaded from here: https://drive.usercontent.google.com/download?id=1KxNCrXzln0lal3N4JiYl9cFOIhT78y1l&export=download&authuser=0
+Afterwards extract the archive in the /data folder.
 
 4. Download the weights for the pretrained models
 
