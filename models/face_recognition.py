@@ -17,25 +17,36 @@ class MyFaceIdYOLOv8:
         Input: tensor_rgb (3, H, W) in range [0, 1]
         Output: list of dicts with 'bbox' and 'keypoints'
         """
-        # Convert tensor to numpy image
-        img_np = tensor_rgb.detach().clamp(0, 1).mul(255).byte().permute(1, 2, 0).cpu().numpy()
-        # YOLO expects BGR
-        img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
-        # Run inference
-        results = self.model.predict(img_bgr, verbose=False)[0]
-        detections = []
-        for box in results.boxes:
-            if float(box.conf[0]) > 0.5: # if confidence is high enough
-                x1, y1, x2, y2 = box.xyxy[0].int().tolist()
-                keypoints = []
-                if hasattr(box, "keypoints") and box.keypoints is not None:
-                    keypoints = box.keypoints[0].cpu().int().tolist()
-                detections.append({
-                    "bbox": [x1, y1, x2, y2],
-                    "keypoints": keypoints  # Will be empty if not supported
-                })
+        # ── torch → NumPy, RGB → BGR  (vectorised, no Python loops) ─────────
+        batch_bgr = (
+            tensor_rgb.detach().clamp_(0, 1)  # [0,1]
+            .mul_(255).byte()  # → uint8 0-255
+            .permute(0, 2, 3, 1)  # N,H,W,C
+            .cpu().numpy()[..., ::-1]  # swap channels → BGR
+        )
 
-        return detections
+        # turn 4-D array into list[HWC] as Ultralytics expects
+        img_list = [img for img in batch_bgr]  # length = N
+
+        # ── YOLOv8 inference (batched) ──────────────────────────────────────
+        results_batch = self.model.predict(
+            img_list, verbose=False, conf=0.5
+        )  # list[Results], len=N
+
+        # ── parse detections ────────────────────────────────────────────────
+        batch_dets = torch.tensor()
+
+        for results in results_batch:  # per image
+            dets = torch.tensor()
+            for box in results.boxes:
+                if float(box.conf[0]) < 0.5:
+                    continue
+                x1, y1, x2, y2 = box.xyxy[0].round().int().tolist()
+
+                dets[0] = torch.tensor([x1, y1, x2, y2])
+            batch_dets.append(dets)
+
+        return batch_dets  # list length == batch size
 
     # v is frame from video as a tensor
     def cut_regions(self, v, bounding_boxes):

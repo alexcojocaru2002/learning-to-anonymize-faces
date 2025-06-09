@@ -1,21 +1,40 @@
 import torch.nn.functional as F
 
-def adversarial_loss(modified_faces, faces, identity_labels, classifier):
+from models.sphereface import AngleLoss
+
+
+def adversarial_loss(modifier, classifier, faces, identity_labels, mode='M'):
     """
-    modifier: M, a model that modifies faces
-    classifier: D, the identity classifier
-    faces: tensor (B, C, H, W)
-    identity_labels: tensor (B,) of integer identity classes
+    Computes adversarial loss between modifier M and identity classifier D.
+
+    Args:
+        modifier (nn.Module): The face modifier model (M).
+        classifier (nn.Module): The identity classifier with angular softmax head (D).
+        faces (Tensor): Input face images of shape (B, C, H, W).
+        identity_labels (Tensor): Corresponding identity labels (B,).
+        mode (str): Either 'M' for updating the modifier or 'D' for updating the classifier.
+
+    Returns:
+        loss (Tensor): Scalar loss value.
     """
-    # Pass through modifier
+    # Generate modified faces
+    modified_faces = modifier(faces)
 
-    # Classifier predictions
-    logits_real = classifier(faces)
-    logits_fake = classifier(modified_faces)
+    # Get classifier outputs: (cos_theta, phi_theta) from AngleLinear
+    output_real = classifier(faces)
+    output_fake = classifier(modified_faces)
 
-    # Cross-entropy losses
-    loss_real = F.cross_entropy(logits_real, identity_labels)
-    loss_fake = F.cross_entropy(logits_fake, identity_labels)
+    criterion = AngleLoss()
 
-    # Total adversarial loss (maximize fake loss, minimize real loss)
-    return -loss_fake + loss_real
+    if mode == 'M':
+        # Minimize classification on modified faces only (fool D)
+        loss = criterion(output_fake, identity_labels)
+    elif mode == 'D':
+        # Maximize classification on modified faces and real faces → we minimize negative loss
+        loss_real = criterion(output_real, identity_labels)
+        loss_fake = criterion(output_fake, identity_labels)
+        loss = loss_real + loss_fake
+    else:
+        raise ValueError("Mode must be 'M' or 'D'")
+
+    return loss
