@@ -21,12 +21,12 @@ def align(image, bbox=None, keypoints=None, output_size=(112, 96)):
             [62.7299, 92.2041]
         ], dtype=np.float32)
         template[:, 0] += 8.0  
-        template[:, 0] *= output_size[1] / 96.0  
-        template[:, 1] *= output_size[0] / 112.0 
+        template[:, 0] *= output_size[1] / 96.0 
+        template[:, 1] *= output_size[0] / 112.0
 
         keypoints = np.array(keypoints, dtype=np.float32)
         M, _ = cv2.estimateAffinePartial2D(keypoints, template)
-        aligned = cv2.warpAffine(image, M, output_size, borderValue=0.0)
+        aligned = cv2.warpAffine(image, M, (output_size[1], output_size[0]), borderValue=0.0)
         
         if aligned.dtype == np.uint8:
             aligned = aligned.astype(np.float32) / 255.0
@@ -42,7 +42,7 @@ def align(image, bbox=None, keypoints=None, output_size=(112, 96)):
     elif bbox is not None:
         x1, y1, x2, y2 = bbox
         cropped = image[y1:y2, x1:x2]
-        resized = cv2.resize(cropped, output_size)
+        resized = cv2.resize(cropped, (output_size[1], output_size[0]))
         if resized.dtype == np.uint8:
             resized = resized.astype(np.float32) / 255.0
         else:
@@ -57,22 +57,18 @@ def align(image, bbox=None, keypoints=None, output_size=(112, 96)):
     else:
         raise ValueError("Either keypoints or bbox must be provided.")
     
-# def align_batch(images, bboxes=None, keypoints_list=None, output_size=(112, 112)):
-#     aligned_faces = []
-#     for idx, image in enumerate(images):
-#         img = cv2.imread(filepath)
-#         mtcnn = MTCNN()
-#         detections = mtcnn.detect_faces(img)
-#         kp = detections[0].get('keypoints')
-#         keypoints = [
-#             kp['left_eye'],
-#             kp['right_eye'],
-#             kp['nose'],
-#             kp['mouth_left'],
-#             kp['mouth_right']
-#         ]
-#         bbox = detections[0].get('box')
-#         aligned = align(image, bbox=bbox, keypoints=keypoints, output_size=output_size)
-#         aligned_faces.append(aligned)
+def align_batch(images):
+    aligned_faces = []
+    for image in images:
+        img_np = np.transpose(image.numpy(), (1, 2, 0))
+        img_np_uint8 = (img_np * 255).astype(np.uint8)
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        mtcnn = MTCNN(keep_all=True, device=device)
+        boxes, probs, landmarks = mtcnn.detect(img_np_uint8, landmarks=True)
+        if boxes is not None or landmarks is not None:
+            image_aligned = align(image, boxes[0].astype(int), landmarks[0])
+        else:
+            image_aligned = image
+        aligned_faces.append(image_aligned)
     
-#     return aligned_faces
+    return torch.stack(aligned_faces)

@@ -3,8 +3,10 @@ import sys
 
 from PIL import Image
 import cv2
-from mtcnn import MTCNN
+from facenet_pytorch.models.mtcnn import MTCNN
+from matplotlib import pyplot as plt
 import numpy as np
+import torch
 from torch.utils.data import DataLoader
 import torchvision.transforms as T
 from torchvision.transforms import ToPILImage, transforms
@@ -55,20 +57,29 @@ def run():
     # Run face recognition on this frame
     face_model.visualize(first_frame)
 
-    # img = load_image_as_tensor('data/lucian.png')
-    # detections = face_model.detect_faces_yolo(img)
-    # img = cv2.imread('data/monica.png')
-    # detector = MTCNN()
-    # detections = detector.detect_faces(img)
-    # kp = detections[0].get('keypoints')
-    # keypoints = [
-    #     kp['left_eye'],
-    #     kp['right_eye'],
-    #     kp['nose'],
-    #     kp['mouth_left'],
-    #     kp['mouth_right']
-    # ]
-    # img_aligned = align(img, detections[0].get('box'), keypoints)
+    # img = load_image_as_tensor('data/domnu.png')
+    # img_np = np.transpose(img.numpy(), (1, 2, 0))
+    # img_np_uint8 = (img_np * 255).astype(np.uint8)
+    # device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    # mtcnn = MTCNN(keep_all=True, device=device)
+    # boxes, probs, landmarks = mtcnn.detect(img_np_uint8, landmarks=True)
+    # print("Boxes:", boxes)
+    # print("Landmarks:", landmarks)
+    # img_aligned = align(img, boxes[0].astype(int), landmarks[0])
+    
+    # print("Aligned image shape:", img_aligned.shape)
+    # print(isinstance(img_aligned, torch.Tensor))
+    # if isinstance(img_aligned, torch.Tensor):
+    #     img_vis = img_aligned.detach().cpu().numpy()
+    #     if img_vis.shape[0] == 3:  # (C, H, W)
+    #         img_vis = np.transpose(img_vis, (1, 2, 0))
+    #     img_vis = np.clip(img_vis, 0, 1)  # If in [0,1]
+    #     plt.imshow(img_vis)
+    #     plt.title("Aligned Image")
+    #     plt.axis('off')
+    #     plt.show()
+    # else:
+    #     print("img_aligned is not a tensor, cannot visualize directly.")
     
     # (Optional) Save all frames from the clip
     for i, frame in enumerate(clip):

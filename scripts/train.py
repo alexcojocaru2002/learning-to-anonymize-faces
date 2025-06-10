@@ -34,14 +34,10 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
             flabels = face_tuple[2]
             flabels_n = face_tuple[3]
 
-            # align m_f
-            # aligned_faces = []
-            # for index, face in enumerate(m_f):
-            #     aligned_faces.append(align(face, detections[index]['bbox'], detections[index]['keypoints']))
-            # detections = model.face_detection.detect_faces_yolo(m_f)
-            # print(detections.shape)
+            aligned_f = align.align_batch(f)
 
             print(f.shape)
+            print(aligned_f.shape)
             l_adv = adversarial_loss(model.m, model.d, f, flabels, mode='D')
             # argmax update on D
             optimizer_d.zero_grad()
