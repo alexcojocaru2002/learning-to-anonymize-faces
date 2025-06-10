@@ -2,11 +2,15 @@ import os
 import sys
 
 from PIL import Image
+import cv2
+from mtcnn import MTCNN
+import numpy as np
 from torch.utils.data import DataLoader
 import torchvision.transforms as T
 from torchvision.transforms import ToPILImage, transforms
 from torchvision.transforms.functional import to_pil_image
 
+from alignment.align import align
 from dataloader.jhmdb import JHMDBFrameDetDataset
 from models.face_recognition import MyFaceIdYOLOv8
 
@@ -51,9 +55,21 @@ def run():
     # Run face recognition on this frame
     face_model.visualize(first_frame)
 
-    img = load_image_as_tensor('data/lucian.png')
-    face_model.visualize(img)
-
+    # img = load_image_as_tensor('data/lucian.png')
+    # detections = face_model.detect_faces_yolo(img)
+    # img = cv2.imread('data/monica.png')
+    # detector = MTCNN()
+    # detections = detector.detect_faces(img)
+    # kp = detections[0].get('keypoints')
+    # keypoints = [
+    #     kp['left_eye'],
+    #     kp['right_eye'],
+    #     kp['nose'],
+    #     kp['mouth_left'],
+    #     kp['mouth_right']
+    # ]
+    # img_aligned = align(img, detections[0].get('box'), keypoints)
+    
     # (Optional) Save all frames from the clip
     for i, frame in enumerate(clip):
         img = face_model.visualize(frame)
