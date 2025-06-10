@@ -1,5 +1,6 @@
 import torch.nn.functional as F
 
+from alignment import align
 from models.sphereface import AngleLoss
 
 
@@ -18,10 +19,12 @@ def adversarial_loss(modifier, classifier, faces, identity_labels, mode='M'):
         loss (Tensor): Scalar loss value.
     """
     # Generate modified faces
-    modified_faces = modifier(faces)
+    aligned_f = align.align_batch(faces)
+    modified_faces = modifier(aligned_f)
 
     # Get classifier outputs: (cos_theta, phi_theta) from AngleLinear
-    output_real = classifier(faces)
+
+    output_real = classifier(aligned_f)
     output_fake = classifier(modified_faces)
 
     criterion = AngleLoss()

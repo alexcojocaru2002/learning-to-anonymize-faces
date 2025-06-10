@@ -1,6 +1,6 @@
 from PIL import Image
+from facenet_pytorch.models.mtcnn import MTCNN
 from matplotlib import transforms
-from mtcnn import MTCNN
 import numpy as np
 import cv2
 import torch

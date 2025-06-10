@@ -34,10 +34,9 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
             flabels = face_tuple[2]
             flabels_n = face_tuple[3]
 
-            aligned_f = align.align_batch(f)
 
-            print(f.shape)
-            print(aligned_f.shape)
+            # print(f.shape)
+            # print(aligned_f.shape)
             l_adv = adversarial_loss(model.m, model.d, f, flabels, mode='D')
             # argmax update on D
             optimizer_d.zero_grad()
@@ -49,7 +48,7 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
             bounding_boxes = model.face_detection.detect_faces_yolo(v)
             l1 = 0
             if len(bounding_boxes) > 0:
-                r_v, v_prime = model.cut_regions(v, bounding_boxes)
+                r_v, v_prime = model.face_detection.cut_regions(v, bounding_boxes)
 
                 # Expects r_v to be (B, 3, H, W)
                 rv_prime = model.m(r_v)
