@@ -45,26 +45,22 @@ class MyFaceIdYOLOv8:
                 x1, y1, x2, y2 = box.xyxy[0].round().int().tolist()
                 rows.append([img_idx, x1, y1, x2, y2])
 
-        if not rows:
-            # no detections at all – return an empty (0,5) tensor
-            return torch.empty((0, 5), dtype=torch.int)
-
         return torch.tensor(rows, dtype=torch.int)
 
     def cut_regions(
+            self,
             frames: torch.Tensor,
             det_tensor: torch.Tensor,
-            img_idx: int | None = None
-    ) -> Tuple[List[torch.Tensor], torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Extracts crops from `frame` using YOLO-style detections and zeros
         those regions in a copy of the frame.
 
         Parameters
         ----------
-        frame : torch.Tensor           # shape (C, H, W)
+        frame : torch.Tensor           # shape (B, C, H, W)
             The video frame.
-        det_tensor : torch.Tensor      # shape (N, 5) or (N, 4)
+        det_tensor : torch.Tensor      # shape (N, 5)
             Detection rows.  If shape is (N, 5) the first column is img_idx.
             Columns are [x1, y1, x2, y2] in pixel coords (inclusive x1/y1,
             exclusive x2/y2, as in PyTorch slicing).
@@ -81,57 +77,49 @@ class MyFaceIdYOLOv8:
         """
         if det_tensor.numel() == 0:
             # nothing to do – just return the untouched clone
-            return [], frames.detach().clone()
+            return torch.empty(), frames.detach().clone()
 
-        # Split coords and (optionally) filter by image index
-        if det_tensor.size(1) == 5:
-            if img_idx is not None:
-                det_tensor = det_tensor[det_tensor[:, 0] == img_idx]
-            boxes = det_tensor[:, 1:5]
-        else:  # already just coords
-            boxes = det_tensor
+        crops = []
+        frames_zeroed = []
 
-        crops: list[torch.Tensor] = []
-        frame_zeroed = frames.detach().clone()
+        B, C, H, W = frames.shape
+        for img_idx, x1, y1, x2, y2 in det_tensor:
+            frame_zeroed = frames[img_idx].detach().clone()
 
-        # Ensure integer slicing
-        boxes = boxes.int()
-
-        C, H, W = frame_zeroed.shape
-        for x1, y1, x2, y2 in boxes:
             # clamp to frame bounds (avoids IndexError on edge boxes)
             x1 = torch.clamp(x1, 0, W)
             x2 = torch.clamp(x2, 0, W)
             y1 = torch.clamp(y1, 0, H)
             y2 = torch.clamp(y2, 0, H)
 
-            crop = frame_zeroed[:, y1:y2, x1:x2].clone()  # slice then clone
-            crops.append(crop)
-
             # zero the region in-place
             frame_zeroed[:, y1:y2, x1:x2] = 0
+            frames_zeroed.append(frame_zeroed)
 
-        return crops, frame_zeroed
+            crop = frames[img_idx] - frame_zeroed  # cut background
+            crops.append(crop)
+
+        return torch.stack(crops), torch.stack(frames_zeroed)
 
     def visualize(self, tensor_rgb, figsize=(8, 6)):
-            """
-            Visualize detected faces and keypoints on the input image.
-            """
-            img_np = tensor_rgb.detach().clamp(0, 1).permute(1, 2, 0).cpu().numpy()
-            detections = self.detect_faces_yolo(tensor_rgb)
+        """
+        Visualize detected faces and keypoints on the input image.
+        """
+        img_np = tensor_rgb.detach().clamp(0, 1).permute(1, 2, 0).cpu().numpy()
+        detections = self.detect_faces_yolo(tensor_rgb)
 
-            fig, ax = plt.subplots(figsize=figsize)
-            ax.imshow(img_np)
-            ax.axis('off')
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.imshow(img_np)
+        ax.axis('off')
 
-            for det in detections:
-                x1, y1, x2, y2 = det['bbox']
-                rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1,
-                                         linewidth=2, edgecolor='cyan', facecolor='none')
-                ax.add_patch(rect)
+        for det in detections:
+            x1, y1, x2, y2 = det['bbox']
+            rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1,
+                                     linewidth=2, edgecolor='cyan', facecolor='none')
+            ax.add_patch(rect)
 
-                for kp in det['keypoints']:
-                    ax.plot(kp[0], kp[1], 'ro', markersize=4)
+            for kp in det['keypoints']:
+                ax.plot(kp[0], kp[1], 'ro', markersize=4)
 
-            plt.tight_layout()
-            plt.show()
+        plt.tight_layout()
+        plt.show()

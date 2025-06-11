@@ -5,7 +5,7 @@ from torchvision.transforms import transforms
 
 from alignment import align
 import torch
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, default_collate
 from tqdm import tqdm
 
 from dataloader.casiawebface import CasiaDataset
@@ -57,7 +57,11 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
             else:
                 v_prime = v
 
-            l_det_dict = model.a(v_prime, vlabels)
+            thechosen_vlables = []
+            for i in bounding_boxes[:, 0].tolist():
+                thechosen_vlables.append(vlabels[i])
+
+            l_det_dict = model.a(v_prime, thechosen_vlables)
             l_det = sum(l_det_dict.values()) # sum of the loss values
 
             # argmin M, A update
@@ -77,8 +81,13 @@ def train_validation_split(vtransform, ftransform):
     vtrain = JHMDBFrameDetDataset("data/JHMDB", split="train", transform=vtransform)
     vval = JHMDBFrameDetDataset("data/JHMDB", split="test", transform=vtransform)
 
-    vtrain_loader = DataLoader(vtrain, batch_size=20, shuffle=True)
-    vval_loader = DataLoader(vval, batch_size=20, shuffle=False)
+    def custom_collate_fn(batch):
+        # Custom collate function to handle variable length sequences
+        clip_1, clip_2 = zip(*batch)
+        return default_collate(clip_1), list(clip_2)
+
+    vtrain_loader = DataLoader(vtrain, batch_size=20, shuffle=True, collate_fn=custom_collate_fn)
+    vval_loader = DataLoader(vval, batch_size=20, shuffle=False, collate_fn=custom_collate_fn)
     print("Loaded JHMDB")
     fdataset = CasiaDataset("data/casia_webface_images", transform=ftransform)
 
@@ -119,3 +128,6 @@ def run(num_output_classes=10):
 
     print("Starting training!")
     train(model, vtrain_loader, ftrain_loader, 12, 10, lambda_weight=1, optimizer_m=optimizer_m, optimizer_d=optimizer_d, optimizer_a=optimizer_a)
+
+if __name__ == "__main__":
+    run()
