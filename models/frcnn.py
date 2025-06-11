@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2
 from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
-from torchvision.models.resnet import resnet101, ResNet101_Weights
+from torchvision.models.resnet import resnet101, ResNet101_Weights, ResNet50_Weights
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor, FasterRCNN
 from torchvision import transforms
 from PIL import Image
@@ -30,7 +30,7 @@ class MyFRCNN(nn.Module):
         device = torch.device("mps" if torch.backends.mps.is_available() else
                               "cuda" if torch.cuda.is_available() else "cpu")
 
-        backbone = resnet_fpn_backbone('resnet101', weights=ResNet101_Weights.IMAGENET1K_V1)
+        backbone = resnet_fpn_backbone('resnet50', weights=ResNet50_Weights.IMAGENET1K_V1)
         self.model = FasterRCNN(backbone, num_classes=num_action_classes + 1)
 
         # We will train this end to end but since the backbone resnet is pretrained on imagenet it should not be the longest training

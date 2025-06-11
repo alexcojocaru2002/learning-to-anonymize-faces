@@ -1,3 +1,4 @@
+import time
 from collections import defaultdict
 from random import random
 
@@ -24,9 +25,7 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
         # 2 for clip_tuple, 4 for face_tuple
         for clip_tuple, face_tuple in zip(video_iter, faces_iter):
 
-            print(clip_tuple[0].shape)
-            print(face_tuple[0].shape)
-
+            print("Starting batch ....")
             v = clip_tuple[0]
             vlabels = clip_tuple[1]
             f = face_tuple[0]
@@ -44,7 +43,7 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
             optimizer_d.step()
 
             # input video frame v
-            print("DONE ONE BACKWARDS PASS")
+            print("Processed faces...")
             bounding_boxes = model.face_detection.detect_faces_yolo(v)
             l1 = 0
             if len(bounding_boxes) > 0:
@@ -57,13 +56,18 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
             else:
                 v_prime = v
 
+            print("Selecting labels...")
             thechosen_vlables = []
             for i in bounding_boxes[:, 0].tolist():
                 thechosen_vlables.append(vlabels[i])
 
+            print("Running FRCNN...")
+            start = time.time()
             l_det_dict = model.a(v_prime, thechosen_vlables)
-            l_det = sum(l_det_dict.values()) # sum of the loss values
+            end = time.time()
+            print(f"FRCNN Took {end - start:.4f} seconds")
 
+            l_det = sum(l_det_dict.values()) # sum of the loss values
             # argmin M, A update
             l_adv = adversarial_loss(model.m, model.d, f, flabels, mode='M')
             final_loss = l_adv + l_det + lambda_weight * l1
@@ -72,10 +76,9 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
             final_loss.backward()
             optimizer_a.step()
             optimizer_m.step()
-
-        #second for for fine tuning A
-
+        print("Done an iteration, saving model...")
         torch.save(model.state_dict(), f"checkpoints/epoch_{epoch}.pth")
+    # second for for fine tuning A
 
 def train_validation_split(vtransform, ftransform):
     vtrain = JHMDBFrameDetDataset("data/JHMDB", split="train", transform=vtransform)
@@ -104,7 +107,7 @@ def train_validation_split(vtransform, ftransform):
 
     return vtrain_loader, vval_loader, ftrain_loader, fval_loader
 
-def run(num_output_classes=10):
+def run(num_output_classes=21):
     # Initialize model and learning rates
     model = OurModel(num_output_classes)
     lr_m = lr_d = 0.0003
