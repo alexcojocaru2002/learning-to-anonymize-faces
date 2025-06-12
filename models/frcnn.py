@@ -27,9 +27,9 @@ action_classes = {
 class MyFRCNN(nn.Module):
     def __init__(self, num_action_classes):
         super().__init__()
-        device = torch.device("mps" if torch.backends.mps.is_available() else
-                              "cuda" if torch.cuda.is_available() else "cpu")
-
+       
+        device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+        
         backbone = resnet_fpn_backbone('resnet50', weights=ResNet50_Weights.IMAGENET1K_V1)
         self.model = FasterRCNN(backbone, num_classes=num_action_classes + 1)
 

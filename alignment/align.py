@@ -58,17 +58,14 @@ def align(image, bbox=None, keypoints=None, output_size=(112, 96)):
         raise ValueError("Either keypoints or bbox must be provided.")
     
 def align_batch(images):
-    aligned_faces = []
-    for image in images:
-        img_np = np.transpose(image.numpy(), (1, 2, 0))
-        img_np_uint8 = (img_np * 255).astype(np.uint8)
-        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        mtcnn = MTCNN(keep_all=True, device=device)
-        boxes, probs, landmarks = mtcnn.detect(img_np_uint8, landmarks=True)
-        if boxes is not None or landmarks is not None:
-            image_aligned = align(image, boxes[0].astype(int), landmarks[0])
-        else:
-            image_aligned = image
-        aligned_faces.append(image_aligned)
-    
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+    mtcnn = MTCNN(keep_all=False, device=device)
+    img_list = [
+        (np.transpose(img.numpy(), (1, 2, 0)) * 255).astype(np.uint8)
+        for img in images
+    ]
+    aligned_faces = mtcnn(img_list)
+    for i, face in enumerate(aligned_faces):
+        if face is None:
+            aligned_faces[i] = images[i]  
     return torch.stack(aligned_faces)
