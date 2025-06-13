@@ -144,6 +144,8 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
             if batch % 10 == 0:
                 print("Done an iteration, saving model...")
                 utils.show_images(torch.stack([v_prime[0]]), 2)
+                utils.show_images(torch.stack([v[0]]), 2)
+
             batch += 1
         print("Finished an epoch! Saving model...")
         torch.save(model.state_dict(), f"checkpoints/epoch_{epoch}.pth")
