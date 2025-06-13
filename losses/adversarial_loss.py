@@ -24,15 +24,20 @@ def adversarial_loss(modifier, classifier, faces, identity_labels, batch, device
     aligned_f = align.align_batch(faces)
     aligned_f = aligned_f.to(device)
 
+    aligned_f = aligned_f * 2 - 1 # have to scale to 1, 1 from 0, 1 since we use tanh as last layer
+
     modified_faces = modifier(aligned_f)
-    modified_faces = (modified_faces + 1) / 2 # have to rescale from -1, 1 to 0, 1 since we use tanh as last layer
 
     if batch % 20 == 0 and mode == 'M':
-        utils.show_images(torch.cat((modified_faces[0:1], aligned_f[0:1]), dim=0))
+        modified_faces_vis = modified_faces[0:1]
+        aligned_f_vis = aligned_f[0:1]
+        modified_faces_vis = (modified_faces_vis + 1) / 2
+        aligned_f_vis = (aligned_f_vis + 1) / 2 # scale back to 0,1 for visualization
+        utils.show_images(torch.cat((modified_faces_vis, aligned_f_vis), dim=0))
 
     # Get classifier outputs: (cos_theta, phi_theta) from AngleLinear
 
-    output_real = classifier(aligned_f)
+    output_real = classifier(aligned_f) # also expects -1, 1 as input
     output_fake = classifier(modified_faces)
 
     criterion = AngleLoss()

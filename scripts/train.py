@@ -28,6 +28,9 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
 
     print("Starting training!")
     for epoch in tqdm(range(T1)):
+        model.a.train()
+        model.m.train()
+        model.d.train()
 
         # 2 for clip_tuple, 4 for face_tuple
         batch = 0
@@ -36,17 +39,17 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
             v = clip_tuple[0].to(model.device)
             vlabels = clip_tuple[1]
             f = face_tuple[0]
-            f_n = face_tuple[1].to(model.device)
+            f_n = face_tuple[1].to(model.device) # negative samples, might be useful for the loss
             flabels = face_tuple[2].to(model.device)
-            flabels_n = face_tuple[3].to(model.device)
+            flabels_n = face_tuple[3].to(model.device) # negative samples, might be useful for the loss
 
 
             # print(f.shape)
             # print(aligned_f.shape)
-            l_adv = adversarial_loss(model.m, model.d, f, flabels, batch=batch, device=model.device, mode='D')
+            l_adv_d = adversarial_loss(model.m, model.d, f, flabels, batch=batch, device=model.device, mode='D')
             # argmax update on D
             optimizer_d.zero_grad()
-            l_adv.backward()
+            l_adv_d.backward()
             optimizer_d.step()
 
             # input video frame v
@@ -55,8 +58,9 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
             if len(bounding_boxes) > 0:
                 r_v, v_prime = model.face_detection.cut_regions(v, bounding_boxes)
                 # Expects r_v to be (B, 3, H, W)
-                rv_prime = model.m(r_v)
-                rv_prime = (rv_prime + 1) / 2 # have to rescale from -1, 1 to 0, 1 since we use tanh
+                rv_prime = model.m(r_v * 2 - 1) # scale to [-1, 1] for modifier
+
+                rv_prime = ( rv_prime + 1 ) / 2 # scale back to [0,1]
 
                 rv_prime_2, _ = model.face_detection.cut_regions_2(rv_prime, bounding_boxes)
 
@@ -83,19 +87,32 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
 
             l_det = sum(l_det_dict.values()) # sum of the loss values
             # argmin M, A update
-            l_adv = adversarial_loss(model.m, model.d, f, flabels, batch=batch, device=model.device, mode='M')
-            final_loss = l_adv + l_det + lambda_weight * l1
-            print(f"Final Loss is {final_loss.item()}, Adversarial loss for D is {l_adv} and Detection loss is {l_det.item()}" )
+            l_adv_m = adversarial_loss(model.m, model.d, f, flabels, batch=batch, device=model.device, mode='M')
+            final_loss = l_adv_m + l_det + lambda_weight * l1
+
+            print(f"Final Loss is {final_loss.item()}, Adversarial loss for D is {l_adv_d} Adversarial loss for M is {l_adv_m} and Detection loss is {l_det.item()}" )
+
             optimizer_a.zero_grad()
             optimizer_m.zero_grad()
             final_loss.backward()
+            if batch % 10 == 0:
+                print(f"Gradient norms at batch {batch}:")
+                for name, p in model.m.named_parameters():
+                    if p.grad is not None:
+                        grad_norm = p.grad.detach().abs().mean().item()
+                        print(f"  {name}: {grad_norm:.6e}")
+                    else:
+                        print(f"  {name}: No gradient")
+
             optimizer_a.step()
             optimizer_m.step()
 
             if batch % 20 == 0:
+
                 print("Done an iteration, saving model...")
                 utils.show_images(torch.stack([v[bounding_boxes[0, 0]], v_prime[0]]), 2)
             batch += 1
+        print("Finished an epoch! Saving model...")
         torch.save(model.state_dict(), f"checkpoints/epoch_{epoch}.pth")
 
     # second for for fine tuning A
