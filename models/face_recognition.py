@@ -77,10 +77,10 @@ class MyFaceIdYOLOv8:
             # nothing to do – just return the untouched clone
             return torch.empty(), frames.detach().clone()
 
+        B, C, H, W = frames.shape
         crops = []
         frames_zeroed = []
 
-        B, C, H, W = frames.shape
         for img_idx, x1, y1, x2, y2 in det_tensor:
             frame_zeroed = frames[img_idx].detach().clone()
 
@@ -94,10 +94,12 @@ class MyFaceIdYOLOv8:
             frame_zeroed[:, y1:y2, x1:x2] = 0
             frames_zeroed.append(frame_zeroed)
 
-            crop = frames[img_idx] - frame_zeroed  # cut background
+            # extract crop
+            crop = frames[img_idx][:, y1:y2, x1:x2]
             crops.append(crop)
 
-        return torch.stack(crops), torch.stack(frames_zeroed)
+        # Now return both as lists
+        return crops, frames_zeroed
 
     def cut_regions_2(
             self,

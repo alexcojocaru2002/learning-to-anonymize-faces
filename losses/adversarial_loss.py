@@ -7,7 +7,7 @@ from models.sphereface import AngleLoss
 from scripts import utils
 
 
-def adversarial_loss(modifier, classifier, faces, identity_labels, batch, device='cpu', mode='M', lambda_weight=7.0):
+def adversarial_loss(modifier, classifier, faces, identity_labels, batch, device='cpu', mode='M', lambda_weight=7.5):
     """
     Computes adversarial loss between modifier M and identity classifier D.
 

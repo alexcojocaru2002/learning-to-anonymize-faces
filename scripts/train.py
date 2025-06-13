@@ -58,20 +58,53 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
             bounding_boxes = model.face_detection.detect_faces_yolo(v)
             l1 = 0
             if len(bounding_boxes) > 0:
-                r_v, v_prime = model.face_detection.cut_regions(v, bounding_boxes)
-                # Expects r_v to be (B, 3, H, W)
-                rv_prime = model.m(r_v * 2 - 1) # scale to [-1, 1] for modifier
+                r_v, _ = model.face_detection.cut_regions(v, bounding_boxes)
 
-                rv_prime = ( rv_prime + 1 ) / 2 # scale back to [0,1]
+                # Collect original crop sizes directly from r_v now
+                crop_sizes = []
+                for face_crop in r_v:
+                    _, h_i, w_i = face_crop.shape
+                    crop_sizes.append((h_i, w_i))
 
-                rv_prime_2, _ = model.face_detection.cut_regions_2(rv_prime, bounding_boxes)
+                # Resize each crop to 256x256 before modifier
+                rv_resized_list = []
+                for face_crop in r_v:
+                    resized_crop = F.interpolate(face_crop.unsqueeze(0), size=(256, 256), mode='bilinear',
+                                                 align_corners=False)
+                    rv_resized_list.append(resized_crop)
 
-                v_prime = v_prime + rv_prime_2  # have to double check if adding images works like this
+                rv_resized = torch.cat(rv_resized_list, dim=0)  # shape: (B, 3, 256, 256)
+
+                # Apply modifier (remember to scale to [-1, 1])
+                rv_resized = model.m(rv_resized * 2 - 1)
+
+                # Resize back to original crop sizes
+                rv_prime_list = []
+                for i, (h_i, w_i) in enumerate(crop_sizes):
+                    resized_back = F.interpolate(rv_resized[i:i + 1], size=(h_i, w_i), mode='bilinear',
+                                                 align_corners=False)
+                    rv_prime_list.append(resized_back[0])
+
+                # Scale back to [0, 1]
+                rv_prime_list = [(crop + 1) / 2 for crop in rv_prime_list]
+
+                # Modify original frames
+                v_prime_list = []
+                for i, box in enumerate(bounding_boxes):
+                    image_idx, x1, y1, x2, y2 = box.int().tolist()
+                    frame = v[image_idx].clone()
+                    mod_crop = rv_prime_list[i]
+                    frame[:, y1:y2, x1:x2] = mod_crop
+                    v_prime_list.append(frame)
+
+                # Final tensor
+                v_prime = torch.stack(v_prime_list, dim=0)
             else:
                 batch += 1
                 print("No faces detected, skipping ...")
                 v_prime = v
                 continue
+
 
             thechosen_vlables = []
             for i in bounding_boxes[:, 0].tolist():
@@ -82,8 +115,8 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
 
 
             # print(v_prime.shape)
-
             v_prime = utils.resize_batch_jhmdb(v_prime, device=model.device) # have to resize shorter side be 340 as stated in original paper
+            # print(v_prime.shape)
             l_det_dict = model.a(v_prime, thechosen_vlables)
 
             l_det = sum(l_det_dict.values()) # sum of the loss values
@@ -108,8 +141,7 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
             optimizer_a.step()
             optimizer_m.step()
 
-            if batch % 20 == 0:
-
+            if batch % 10 == 0:
                 print("Done an iteration, saving model...")
                 utils.show_images(torch.stack([v_prime[0]]), 2)
             batch += 1
