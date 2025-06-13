@@ -1,3 +1,4 @@
+import gc
 import itertools
 import time
 from collections import defaultdict
@@ -37,6 +38,7 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
         for clip_tuple, face_tuple in zip(video_iter, faces_iter):
 
             v = clip_tuple[0].to(model.device)
+
             vlabels = clip_tuple[1]
             f = face_tuple[0]
             f_n = face_tuple[1].to(model.device) # negative samples, might be useful for the loss
@@ -65,8 +67,6 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
                 rv_prime_2, _ = model.face_detection.cut_regions_2(rv_prime, bounding_boxes)
 
                 v_prime = v_prime + rv_prime_2  # have to double check if adding images works like this
-
-                l1 = F.l1_loss(rv_prime_2, r_v)
             else:
                 batch += 1
                 print("No faces detected, skipping ...")
@@ -80,15 +80,16 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
                 vlabels[i]['frame_idx'] = vlabels[i]['frame_idx'].to(model.device)
                 thechosen_vlables.append(vlabels[i])
 
-            # start = time.time()
+
+            # print(v_prime.shape)
+
+            v_prime = utils.resize_batch_jhmdb(v_prime, device=model.device) # have to resize shorter side be 340 as stated in original paper
             l_det_dict = model.a(v_prime, thechosen_vlables)
-            # end = time.time()
-            # print(f"FRCNN Took {end - start:.4f} seconds")
 
             l_det = sum(l_det_dict.values()) # sum of the loss values
             # argmin M, A update
             l_adv_m = adversarial_loss(model.m, model.d, f, flabels, batch=batch, device=model.device, mode='M')
-            final_loss = l_adv_m + l_det + lambda_weight * l1
+            final_loss = l_adv_m + l_det
 
             print(f"Final Loss is {final_loss.item()}, Adversarial loss for D is {l_adv_d} Adversarial loss for M is {l_adv_m} and Detection loss is {l_det.item()}" )
 
@@ -110,7 +111,7 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
             if batch % 20 == 0:
 
                 print("Done an iteration, saving model...")
-                utils.show_images(torch.stack([v[bounding_boxes[0, 0]], v_prime[0]]), 2)
+                utils.show_images(torch.stack([v_prime[0]]), 2)
             batch += 1
         print("Finished an epoch! Saving model...")
         torch.save(model.state_dict(), f"checkpoints/epoch_{epoch}.pth")
@@ -148,6 +149,11 @@ def train_validation_split(vtransform, ftransform):
 
 def run(num_output_classes=21):
     # Initialize model and learning rates
+
+    gc.collect()
+    torch.cuda.empty_cache()
+    torch.cuda.ipc_collect()
+
     model = OurModel(num_output_classes)
     lr_m = lr_d = 0.0003
     lr_a = 0.001

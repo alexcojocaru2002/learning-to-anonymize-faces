@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
+import torch.nn.functional as F
 
 
 def show_images(tensor, max_images=10):
@@ -48,3 +49,35 @@ def show_images(tensor, max_images=10):
         plt.axis('off')
 
     plt.show()
+
+# Used to resize jhmdb, mentioned in paper section 4 face modification
+def resize_batch_jhmdb(batch_images, target_shorter_side=340, device='cuda'):
+    """
+    Resize a batch of images to have shorter side = 340 while preserving aspect ratio.
+    Args:
+        batch_images (Tensor): (B, 3, H, W), values in [0, 1].
+        target_shorter_side (int): Target size for shorter side.
+        device (str): torch device.
+    Returns:
+        List of resized tensors, each still in [0, 1].
+    """
+    batch_images = batch_images.to(device)
+    resized_batch = []
+
+    for img in batch_images:
+        _, h, w = img.shape
+        if h < w:
+            scale = target_shorter_side / h
+            new_h = target_shorter_side
+            new_w = int(w * scale)
+        else:
+            scale = target_shorter_side / w
+            new_w = target_shorter_side
+            new_h = int(h * scale)
+
+        resized_img = F.interpolate(img.unsqueeze(0), size=(new_h, new_w), mode='bilinear', align_corners=False)
+        resized_batch.append(resized_img.squeeze(0))
+
+    return torch.stack(resized_batch)
+
+

@@ -57,7 +57,7 @@ class ResNet(nn.Module):
         for _ in range(2):
             out_ch = in_ch * 2
             down_layers += [
-                nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=2, padding=1, bias=False),
+                nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=2, padding=1, bias=True),
                 nn.InstanceNorm2d(out_ch),
                 nn.ReLU(inplace=True)
             ]
