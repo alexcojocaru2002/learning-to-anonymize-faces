@@ -28,7 +28,7 @@ class CasiaDataset(Dataset):
         # make indexlist
         self.indexlist = []
         for image in images:
-            self.indexlist.append(image + ' ' + str(self.labels[os.path.normpath(image).split('/')[-2]]))
+            self.indexlist.append(image + ' ' + str(self.labels[os.path.normpath(image).split('\\')[-2]]))
 
         random.shuffle(self.indexlist)
 

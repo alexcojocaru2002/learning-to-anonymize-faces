@@ -28,13 +28,10 @@ class MyFRCNN(nn.Module):
     def __init__(self, num_action_classes):
         super().__init__()
        
-        device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-        
-        backbone = resnet_fpn_backbone('resnet50', weights=ResNet50_Weights.IMAGENET1K_V1)
-        self.model = FasterRCNN(backbone, num_classes=num_action_classes + 1)
+
+
 
         # We will train this end to end but since the backbone resnet is pretrained on imagenet it should not be the longest training
-        self.model.to(device)
 
     '''
     images: list of input images (tensors, shape [3, H, W])

@@ -1,10 +1,12 @@
+import torch
 import torch.nn.functional as F
 
 from alignment import align
 from models.sphereface import AngleLoss
+from scripts import utils
 
 
-def adversarial_loss(modifier, classifier, faces, identity_labels, mode='M'):
+def adversarial_loss(modifier, classifier, faces, identity_labels, batch, device='cpu', mode='M', ):
     """
     Computes adversarial loss between modifier M and identity classifier D.
 
@@ -20,7 +22,13 @@ def adversarial_loss(modifier, classifier, faces, identity_labels, mode='M'):
     """
     # Generate modified faces
     aligned_f = align.align_batch(faces)
+    aligned_f = aligned_f.to(device)
+
     modified_faces = modifier(aligned_f)
+    modified_faces = (modified_faces + 1) / 2 # have to rescale from -1, 1 to 0, 1 since we use tanh as last layer
+
+    if batch % 20 == 0 and mode == 'M':
+        utils.show_images(torch.cat((modified_faces[0:1], aligned_f[0:1]), dim=0))
 
     # Get classifier outputs: (cos_theta, phi_theta) from AngleLinear
 
