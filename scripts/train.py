@@ -48,7 +48,7 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
 
             # print(f.shape)
             # print(aligned_f.shape)
-            l_adv_d = adversarial_loss(model.m, model.d, f, flabels, batch=batch, device=model.device, mode='D')
+            l_adv_d = adversarial_loss(model.m, model.d, f, flabels, batch=batch, device=model.device, mode='D', lambda_weight=lambda_weight)
             # argmax update on D
             optimizer_d.zero_grad()
             l_adv_d.backward()
@@ -121,7 +121,7 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
 
             l_det = sum(l_det_dict.values()) # sum of the loss values
             # argmin M, A update
-            l_adv_m = adversarial_loss(model.m, model.d, f, flabels, batch=batch, device=model.device, mode='M')
+            l_adv_m = adversarial_loss(model.m, model.d, f, flabels, batch=batch, device=model.device, mode='M', lambda_weight=lambda_weight)
             final_loss = l_adv_m + l_det
 
             print(f"Final Loss is {final_loss.item()}, Adversarial loss for D is {l_adv_d} Adversarial loss for M is {l_adv_m} and Detection loss is {l_det.item()}" )
@@ -182,35 +182,38 @@ def train_validation_split(vtransform, ftransform):
     return vtrain_loader, None, ftrain_loader, None
 
 def run(num_output_classes=21):
-    # Initialize model and learning rates
+    lambda_weights = [0.0, 0.01, 0.1, 1.0, 10.0]
+    
+    for lambda_weight in lambda_weights:
+        # Initialize model and learning rates
 
-    gc.collect()
-    torch.cuda.empty_cache()
-    torch.cuda.ipc_collect()
+        gc.collect()
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
 
-    model = OurModel(num_output_classes)
-    lr_m = lr_d = 0.0003
-    lr_a = 0.001
-    optimizer_m = torch.optim.Adam(model.m.parameters(), betas=(0.5, 0.999), lr=lr_m)
-    optimizer_d = torch.optim.Adam(model.d.parameters(), betas=(0.5, 0.999), lr=lr_d)
-    optimizer_a = torch.optim.Adam(model.a.parameters(), betas=(0.5, 0.999), lr=lr_a)
+        model = OurModel(num_output_classes)
+        lr_m = lr_d = 0.0003
+        lr_a = 0.001
+        optimizer_m = torch.optim.Adam(model.m.parameters(), betas=(0.5, 0.999), lr=lr_m)
+        optimizer_d = torch.optim.Adam(model.d.parameters(), betas=(0.5, 0.999), lr=lr_d)
+        optimizer_a = torch.optim.Adam(model.a.parameters(), betas=(0.5, 0.999), lr=lr_a)
 
-    # Transformations for our dataloader
-    # Storing images as tensors
-    vtransform = T.Compose([
-        T.ToTensor()
-    ])
+        # Transformations for our dataloader
+        # Storing images as tensors
+        vtransform = T.Compose([
+            T.ToTensor()
+        ])
 
-    ftransform = T.Compose([
-        T.ToTensor(),
+        ftransform = T.Compose([
+            T.ToTensor(),
 
-    ])
+        ])
 
-    vtrain_loader, _, ftrain_loader, _ = train_validation_split(vtransform, ftransform)
+        vtrain_loader, _, ftrain_loader, _ = train_validation_split(vtransform, ftransform)
 
-    # show_input_data(vtrain_loader, ftrain_loader, model.device)
+        # show_input_data(vtrain_loader, ftrain_loader, model.device)
 
-    train(model, vtrain_loader, ftrain_loader, 12, 10, lambda_weight=1, optimizer_m=optimizer_m, optimizer_d=optimizer_d, optimizer_a=optimizer_a)
+        train(model, vtrain_loader, ftrain_loader, 12, 10, lambda_weight=1, optimizer_m=optimizer_m, optimizer_d=optimizer_d, optimizer_a=optimizer_a)
 
 def show_input_data(loader_video, loader_faces, device):
     N = 20
