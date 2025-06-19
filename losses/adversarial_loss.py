@@ -40,17 +40,15 @@ def adversarial_loss(modifier, classifier, faces, identity_labels, batch, device
 
     # Get classifier outputs: (cos_theta, phi_theta) from AngleLinear
 
-    print(aligned_f.min())
-    print(aligned_f.max())
     output_real = classifier(aligned_f) # also expects -1, 1 as input
     output_fake = classifier(modified_faces)
 
     predicted_idx = output_real[0].argmax(dim=1)    # class index
     predicted_idx_fake = output_fake[0].argmax(dim=1)
 
-    print(predicted_idx)
+    # print(predicted_idx)
     # print(predicted_idx_fake)
-    print(identity_labels)
+    # print(identity_labels)
     criterion = AngleLoss()
     l1_loss = 0
 
