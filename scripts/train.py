@@ -48,7 +48,8 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
 
             # print(f.shape)
             # print(aligned_f.shape)
-            l_adv_d = adversarial_loss(model.m, model.d, f, flabels, batch=batch, device=model.device, mode='D', lambda_weight=lambda_weight)
+            l_adv_d, l1_d = adversarial_loss(model.m, model.d, f, flabels, batch=batch, device=model.device, mode='D', lambda_weight=lambda_weight)
+            l_adv_d = l_adv_d + l1_d
             # argmax update on D
             optimizer_d.zero_grad()
             l_adv_d.backward()
@@ -56,7 +57,6 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
 
             # input video frame v
             bounding_boxes = model.face_detection.detect_faces_yolo(v)
-            l1 = 0
             if len(bounding_boxes) > 0:
                 r_v, _ = model.face_detection.cut_regions(v, bounding_boxes)
 
@@ -121,15 +121,17 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
 
             l_det = sum(l_det_dict.values()) # sum of the loss values
             # argmin M, A update
-            l_adv_m = adversarial_loss(model.m, model.d, f, flabels, batch=batch, device=model.device, mode='M', lambda_weight=lambda_weight)
+            l_adv_m, l1_m = adversarial_loss(model.m, model.d, f, flabels, batch=batch, device=model.device, mode='M', lambda_weight=lambda_weight)
+            l_adv_m = l_adv_m + l1_m
             final_loss = l_adv_m + l_det
 
-            print(f"Final Loss is {final_loss.item()}, Adversarial loss for D is {l_adv_d} Adversarial loss for M is {l_adv_m} and Detection loss is {l_det.item()}" )
+            print(f"Final Loss is {final_loss.item()}, Adversarial loss for D is {l_adv_d} Adversarial loss for M is {l_adv_m} and Detection loss is {l_det.item()} L1 loss is {l1_m.item()}" )
 
             optimizer_a.zero_grad()
             optimizer_m.zero_grad()
             final_loss.backward()
-            if batch % 10 == 0:
+            if batch % 50 == 0:
+                torch.save(model.state_dict(), f"checkpoints/epoch_{epoch}.pth")
                 print(f"Gradient norms at batch {batch}:")
                 for name, p in model.m.named_parameters():
                     if p.grad is not None:
@@ -137,16 +139,16 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
                         print(f"  {name}: {grad_norm:.6e}")
                     else:
                         print(f"  {name}: No gradient")
-
             optimizer_a.step()
             optimizer_m.step()
-
-            if batch % 10 == 0:
-                print("Done an iteration, saving model...")
+            if batch % 50 == 0:
                 utils.show_images(torch.stack([v_prime[0]]), 2)
                 utils.show_images(torch.stack([v[0]]), 2)
 
             batch += 1
+            gc.collect()
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
         print("Finished an epoch! Saving model...")
         torch.save(model.state_dict(), f"checkpoints/epoch_{epoch}.pth")
 
@@ -163,7 +165,7 @@ def train_validation_split(vtransform, ftransform):
         clip_1, clip_2 = zip(*batch)
         return default_collate(clip_1), list(clip_2)
 
-    vtrain_loader = DataLoader(vtrain, batch_size=5, shuffle=True, collate_fn=custom_collate_fn)
+    vtrain_loader = DataLoader(vtrain, batch_size=2, shuffle=True, collate_fn=custom_collate_fn)
     # vval_loader = DataLoader(vval, batch_size=20, shuffle=False, collate_fn=custom_collate_fn)
     print("Loaded JHMDB")
     fdataset = CasiaDataset("data/casia_webface_images", transform=ftransform)
@@ -173,7 +175,7 @@ def train_validation_split(vtransform, ftransform):
 
     ftrain, fval, ftest = torch.utils.data.random_split(fdataset, [0.6, 0.2, 0.2])
 
-    ftrain_loader = DataLoader(ftrain, batch_size=5, shuffle=True, num_workers=4)
+    ftrain_loader = DataLoader(ftrain, batch_size=2, shuffle=True, num_workers=4)
     # fval_loader = DataLoader(fval, batch_size=20, shuffle=False, num_workers=4)
     # ftest_loader = DataLoader(ftrain, batch_size=20, shuffle=False, num_workers=4)
 
@@ -187,11 +189,9 @@ def run(num_output_classes=21):
     for lambda_weight in lambda_weights:
         # Initialize model and learning rates
 
-        gc.collect()
-        torch.cuda.empty_cache()
-        torch.cuda.ipc_collect()
 
         model = OurModel(num_output_classes)
+
         lr_m = lr_d = 0.0003
         lr_a = 0.001
         optimizer_m = torch.optim.Adam(model.m.parameters(), betas=(0.5, 0.999), lr=lr_m)
@@ -213,7 +213,7 @@ def run(num_output_classes=21):
 
         # show_input_data(vtrain_loader, ftrain_loader, model.device)
 
-        train(model, vtrain_loader, ftrain_loader, 12, 10, lambda_weight=1, optimizer_m=optimizer_m, optimizer_d=optimizer_d, optimizer_a=optimizer_a)
+        train(model, vtrain_loader, ftrain_loader, 12, 10, lambda_weight=0.5, optimizer_m=optimizer_m, optimizer_d=optimizer_d, optimizer_a=optimizer_a)
 
 def show_input_data(loader_video, loader_faces, device):
     N = 20

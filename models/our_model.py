@@ -23,7 +23,7 @@ class OurModel(nn.Module):
 
         backbone = resnet_fpn_backbone('resnet50', weights=ResNet50_Weights.IMAGENET1K_V1)
         self.a = FasterRCNN(backbone, num_classes=num_output_classes + 1)
-        self.d = sphere20a()
+        self.d = sphere20a(net_path='weights/sphere20a_20171020.pth')
 
 
         self.face_detection.model.to(device)
