@@ -2,12 +2,18 @@ import os
 import sys
 
 from PIL import Image
+import cv2
+from facenet_pytorch.models.mtcnn import MTCNN
+from matplotlib import pyplot as plt
+import numpy as np
+import torch
 from torch.utils.data import DataLoader
 import torchvision.transforms as T
 from torchvision.transforms import ToPILImage, transforms
 from torchvision.transforms.functional import to_pil_image
 
-from dataloader.jhmdb import JHMDBFramesDataset
+from alignment.align import align
+from dataloader.jhmdb import JHMDBFrameDetDataset
 from models.face_recognition import MyFaceIdYOLOv8
 
 
@@ -27,7 +33,7 @@ def run():
         T.ToTensor()
     ])
 
-    dataset = JHMDBFramesDataset("data/JHMDB/Frames", transform=transform)
+    dataset = JHMDBFrameDetDataset("data/JHMDB/Frames", transform=transform)
     loader = DataLoader(dataset, batch_size=4, shuffle=True)
 
     # Initialize face recognizer
@@ -51,9 +57,30 @@ def run():
     # Run face recognition on this frame
     face_model.visualize(first_frame)
 
-    img = load_image_as_tensor('data/lucian.png')
-    face_model.visualize(img)
-
+    # img = load_image_as_tensor('data/domnu.png')
+    # img_np = np.transpose(img.numpy(), (1, 2, 0))
+    # img_np_uint8 = (img_np * 255).astype(np.uint8)
+    # device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    # mtcnn = MTCNN(keep_all=True, device=device)
+    # boxes, probs, landmarks = mtcnn.detect(img_np_uint8, landmarks=True)
+    # print("Boxes:", boxes)
+    # print("Landmarks:", landmarks)
+    # img_aligned = align(img, boxes[0].astype(int), landmarks[0])
+    
+    # print("Aligned image shape:", img_aligned.shape)
+    # print(isinstance(img_aligned, torch.Tensor))
+    # if isinstance(img_aligned, torch.Tensor):
+    #     img_vis = img_aligned.detach().cpu().numpy()
+    #     if img_vis.shape[0] == 3:  # (C, H, W)
+    #         img_vis = np.transpose(img_vis, (1, 2, 0))
+    #     img_vis = np.clip(img_vis, 0, 1)  # If in [0,1]
+    #     plt.imshow(img_vis)
+    #     plt.title("Aligned Image")
+    #     plt.axis('off')
+    #     plt.show()
+    # else:
+    #     print("img_aligned is not a tensor, cannot visualize directly.")
+    
     # (Optional) Save all frames from the clip
     for i, frame in enumerate(clip):
         img = face_model.visualize(frame)

@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, channels, use_dropout=False, padding_type='reflect'):
+    def __init__(self, channels, device, use_dropout=False, padding_type='reflect'):
         super().__init__()
         pad = {
             'reflect': nn.ReflectionPad2d,
@@ -39,10 +39,9 @@ class ResidualBlock(nn.Module):
 class ResNet(nn.Module):
     # ngf = number of filters in first conv layer
     # basically output channels la fiecare resnet block
-    def __init__(self, input_nc=3, output_nc=3, ngf=64, n_blocks=9, use_dropout=False, padding_type='reflect'):
+    def __init__(self, device, input_nc=3, output_nc=3, ngf=64, n_blocks=9, use_dropout=False, padding_type='reflect'):
         super().__init__()
         assert n_blocks >= 0, "Number of residual blocks must be non-negative"
-
         Pad = nn.ReflectionPad2d if padding_type == 'reflect' else nn.ZeroPad2d
 
         self.initial = nn.Sequential(
@@ -58,7 +57,7 @@ class ResNet(nn.Module):
         for _ in range(2):
             out_ch = in_ch * 2
             down_layers += [
-                nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=2, padding=1, bias=False),
+                nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=2, padding=1, bias=True),
                 nn.InstanceNorm2d(out_ch),
                 nn.ReLU(inplace=True)
             ]
@@ -88,6 +87,7 @@ class ResNet(nn.Module):
             nn.Conv2d(ngf, output_nc, kernel_size=7),
             nn.Tanh()
         )
+        self.to(device)
 
     def forward(self, x):
         x = self.initial(x)
