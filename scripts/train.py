@@ -41,9 +41,7 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
 
             vlabels = clip_tuple[1]
             f = face_tuple[0]
-            f_n = face_tuple[1].to(model.device) # negative samples, might be useful for the loss
             flabels = face_tuple[2].to(model.device)
-            flabels_n = face_tuple[3].to(model.device) # negative samples, might be useful for the loss
 
 
             # print(f.shape)
@@ -146,6 +144,8 @@ def train(model, loader_video, loader_faces, T1, T2, lambda_weight, optimizer_d,
                 utils.show_images(torch.stack([v[0]]), 2)
 
             batch += 1
+
+            del v, v_prime, r_v, rv_resized, rv_resized_list, rv_prime_list, v_prime_list, bounding_boxes, l_adv_d, l1_d, l_adv_m, l1_m, l_det, l_det_dict, thechosen_vlables, f, flabels, final_loss
             gc.collect()
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
@@ -185,35 +185,34 @@ def train_validation_split(vtransform, ftransform):
 
 def run(num_output_classes=21):
     lambda_weights = [0.0, 0.01, 0.1, 1.0, 10.0]
-    
-    for lambda_weight in lambda_weights:
-        # Initialize model and learning rates
+
+    # Initialize model and learning rates
 
 
-        model = OurModel(num_output_classes)
+    model = OurModel(num_output_classes)
 
-        lr_m = lr_d = 0.0003
-        lr_a = 0.001
-        optimizer_m = torch.optim.Adam(model.m.parameters(), betas=(0.5, 0.999), lr=lr_m)
-        optimizer_d = torch.optim.Adam(model.d.parameters(), betas=(0.5, 0.999), lr=lr_d)
-        optimizer_a = torch.optim.Adam(model.a.parameters(), betas=(0.5, 0.999), lr=lr_a)
+    lr_m = lr_d = 0.0003
+    lr_a = 0.001
+    optimizer_m = torch.optim.Adam(model.m.parameters(), betas=(0.5, 0.999), lr=lr_m)
+    optimizer_d = torch.optim.Adam(model.d.parameters(), betas=(0.5, 0.999), lr=lr_d)
+    optimizer_a = torch.optim.Adam(model.a.parameters(), betas=(0.5, 0.999), lr=lr_a)
 
-        # Transformations for our dataloader
-        # Storing images as tensors
-        vtransform = T.Compose([
-            T.ToTensor()
-        ])
+    # Transformations for our dataloader
+    # Storing images as tensors
+    vtransform = T.Compose([
+        T.ToTensor()
+    ])
 
-        ftransform = T.Compose([
-            T.ToTensor(),
+    ftransform = T.Compose([
+        T.ToTensor(),
 
-        ])
+    ])
 
-        vtrain_loader, _, ftrain_loader, _ = train_validation_split(vtransform, ftransform)
+    vtrain_loader, _, ftrain_loader, _ = train_validation_split(vtransform, ftransform)
 
-        # show_input_data(vtrain_loader, ftrain_loader, model.device)
+    # show_input_data(vtrain_loader, ftrain_loader, model.device)
 
-        train(model, vtrain_loader, ftrain_loader, 12, 10, lambda_weight=0.5, optimizer_m=optimizer_m, optimizer_d=optimizer_d, optimizer_a=optimizer_a)
+    train(model, vtrain_loader, ftrain_loader, 12, 10, lambda_weight=0.5, optimizer_m=optimizer_m, optimizer_d=optimizer_d, optimizer_a=optimizer_a)
 
 def show_input_data(loader_video, loader_faces, device):
     N = 20
